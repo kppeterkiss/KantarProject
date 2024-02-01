@@ -1,0 +1,19 @@
+name: kantar_data_env2
+channels:
+  - anaconda
+  - anaconda-fusion
+  - defaults
+  - conda-forge
+dependencies:
+  - python<=3.12
+  - openpyxl
+  - ipykernel
+  - ipython
+  - jupyter
+  - pandas
+  - seaborn
+  - sqlalchemy
+  - sqlalchemy-utils
+  - statsmodels
+  - tqdm
+  - numpy
