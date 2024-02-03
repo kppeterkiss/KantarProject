@@ -1,5 +1,8 @@
  
 
+docker build --tag "python_script" .
+
+https://micromamba-docker.readthedocs.io/en/latest/advanced_usage.html#multiple-environments
 description of env: 
 envirronment.yml
 

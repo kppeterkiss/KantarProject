@@ -1,0 +1,23 @@
+services:
+  python:
+    build:
+      context: .
+    environment:
+      ENV_NAME: ${CONDA_ENV}
+    volumes:
+      - ./:/code
+      - ../KantarData:/KantarData
+
+    command:  >
+      sh -c "python ../code/test.py "
+  db:
+    image: postgres
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: ${PQ_PW}
+
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 8080:8080

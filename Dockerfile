@@ -1,7 +1,6 @@
-FROM ubuntu:latest
-LABEL authors="Administrador"
+FROM mambaorg/micromamba:1.5.6
+COPY --chown=$MAMBA_USER:$MAMBA_USER environment.yml /tmp/environment.yml
+RUN micromamba create -y -f /tmp/environment.yml && \
+    micromamba clean --all --yes
+WORKDIR /code
 
-
-RUN conda env create -f environment.yml
-CMD jupyter nbconvert --to notebook --inplace --execute data_to_pg.ipynb
-ENTRYPOINT ["top", "-b"]
