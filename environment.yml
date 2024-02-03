@@ -5,17 +5,17 @@ channels:
   - defaults
   - conda-forge
 dependencies:
-  - python<=3.12
+  - python>=3.12
   - openpyxl
   - ipykernel
   - ipython
   - jupyter
   - pandas
   - seaborn
-  - sqlalchemy
-  - sqlalchemy-utils
+  - sqlalchemy=2.0.25
+  - sqlalchemy-utils=0.41.1
   - statsmodels
   - tqdm
   - numpy
-  - nbconvert
+  #- nbconvert>=7.10
   - psycopg2

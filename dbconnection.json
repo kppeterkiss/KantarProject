@@ -1,1 +1,7 @@
-{"DB_HOST":"127.0.0.1", "DB_PORT":5432,"DATABASE":"Kantar", "DB_USER":"postgres", "DB_PASS":"Creda2023"}
+{
+  "DB_HOST":"db",
+  "DB_PORT":5432,
+  "DATABASE":"Kantar",
+  "DB_USER":"user1",
+  "DB_PASS":"example"
+}
