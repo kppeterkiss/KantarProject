@@ -8,6 +8,7 @@
 import os
 import pandas as pd
 import numpy as np
+import psycopg2
 
 result_dir = './results/'
 data_dir = '../KantarData/'
@@ -16,7 +17,8 @@ figure_dir = "./figures/"
 # os.listdir(data_dir)
 
 test = True
-local_test = False
+local_test_no_db = False
+local_test_no_auth=True
 
 # %%
 read_able_columns = pd.read_excel(data_dir + 'Explicacion_VariablesV3.xlsx', engine='openpyxl')
@@ -143,7 +145,7 @@ def get_oultiers(odf1):
 
 
 import traceback
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, MetaData
 import numbers
 
 all_products = None
@@ -193,14 +195,14 @@ def fix_enc(source_df_test, bad_enc=False):
     for col in source_df_test.columns:
         print(f"-----------processing {col}-----------")
         if col not in type_dict_new:
-            print('skipping ', col)
+            #print('skipping ', col)
             continue  # for FechaCesta
         elem = source_df_test[col].iloc[0]
         if source_df_test[col].dtype == "object" and (
                 (type_dict_new[col] == "str") or (type_dict_new[col] == "category")):
             source_df_test[col] = source_df_test[col].fillna("")
             if isinstance(elem, numbers.Number):
-                print('Numeric, skipping transform: ', elem)
+                #print('Numeric, skipping transform: ', elem)
                 continue
             print('Trying transformation: ', elem)
             if bad_enc:
@@ -216,12 +218,12 @@ def fix_enc(source_df_test, bad_enc=False):
         print(" Converting ", col, ' -> ', type_dict_new[col])
         if type_dict_new[col] == 'float64':
 
-            print('Example element:', elem, type(elem))
+            #print('Example element:', elem, type(elem))
             if type(elem) == str:
-                print(col, " -> removing ','")
+                #print(col, " -> removing ','")
                 source_df_test[col] = source_df_test[col].str.replace(",", ".")
         source_df_test[col] = source_df_test[col].astype(type_dict_new[col])
-        print(col, " -- ", source_df_test[col].dtype)
+        #print(col, " -- ", source_df_test[col].dtype)
 
     return source_df_test
 
@@ -269,6 +271,7 @@ def load_and_preprocess_data(year, nrows=None):
 # %%
 import json
 from sqlalchemy_utils import drop_database, database_exists, create_database
+from sqlalchemy import inspect
 
 
 def get_connection():
@@ -281,17 +284,48 @@ def get_connection():
     DB_PORT = connection_data["DB_PORT"]
     DATABASE = connection_data["DATABASE"]
     CHARSET = "utf-8"
-
-    connect_string = 'postgresql+psycopg2://{}:{}@{}:{}/{}?charset={}'.format(DB_USER, DB_PASS, DB_HOST, DB_PORT, DATABASE,
-                                                                              CHARSET)
     connect_string = 'postgresql+psycopg2://{}:{}@{}:{}/{}'.format(DB_USER, DB_PASS, DB_HOST, DB_PORT, DATABASE)
 
+    # for local test with trust auth
+    if local_test_no_auth:
+        DB_HOST = 'localhost'
+        DB_PASS='postgres'
+        DB_USER='postgres'
+        connect_string = 'postgresql+psycopg2://{}:{}@{}:{}/{}'.format(DB_USER, DB_PASS, DB_HOST, DB_PORT, DATABASE)
+
+
+    #connect_string = 'postgresql+psycopg2://{}:{}@{}:{}/{}?charset={}'.format(DB_USER, DB_PASS, DB_HOST, DB_PORT, DATABASE,
+    #                                                                          CHARSET)
+    '''
     if database_exists(connect_string):
         drop_database(connect_string)
     create_database(connect_string)
+    '''
+    if not database_exists(connect_string):
+        create_database(connect_string)
 
     engine = create_engine(connect_string, connect_args={'client_encoding': CHARSET})
+
+
     return engine
+
+
+year_table_name='years'
+def table_exists(engine,name):
+    ins = inspect(engine)
+    ret =ins.dialect.has_table(engine.connect(),name)
+    print('Table "{}" exists: {}'.format(name, ret))
+    return ret
+def get_years_already_loaded(engine):
+    lst=[]
+    if table_exists(engine,year_table_name):
+        df = pd.read_sql_table(year_table_name, engine)
+        lst = df['years'].values.tolist()
+    return lst
+
+def add_years(lst, engine):
+    df = pd.DataFrame({'years':lst})
+    df.to_sql(year_table_name, engine, if_exists='replace', method='multi', index=False)
 
 def to_table(name, df, engine, mode='append'):
     from sqlalchemy import create_engine
@@ -305,7 +339,7 @@ def separate_and_save(df, dfs, engine):
 
         data = df[attributes]
         if name == 'purchases':
-            if not local_test:
+            if not local_test_no_db:
                 to_table(name, data, engine)
             del df
             # data = get_oultiers(data)
@@ -354,21 +388,39 @@ for f in os.listdir(data_dir):
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    for year in years:
-        print(year)
-        df = load_and_preprocess_data(year, nrows)
-        # df=get_oultiers(df)
-        if local_test:
-            engine = None
-        else:
-            engine = get_connection()
-        dfs = separate_and_save(df, dfs, engine)
 
-        for name, l in dfs.items():
-            if name == 'purchases':
+    if local_test_no_db:
+        engine = None
+    else:
+        engine = get_connection()
+    years_already_loaded = get_years_already_loaded(engine)
+
+    for year in years:
+        try:
+            if year in years_already_loaded:
+                print(f'Data for {year} already in db.')
                 continue
-            data = pd.concat(l, ignore_index=True).drop_duplicates()
-            if not local_test:
-                to_table(name, data, engine, "append")
+            print(f'Loading data for {year} to db..')
+            df = load_and_preprocess_data(year, nrows)
+            # df=get_oultiers(df)
+            dfs = separate_and_save(df, dfs, engine)
+
+            for name, l in dfs.items():
+                if name == 'purchases':
+                    continue
+                data = pd.concat(l, ignore_index=True).drop_duplicates()
+                if not local_test_no_db:
+                    to_table(name, data, engine, "append")
+
+            years_already_loaded.append(year)
+        except Exception as e:
+            print(f"Load failed {year}: ´{e}")
+    add_years(years_already_loaded,engine)
+
+
+
+
+
+
 
 # See PyCharm help at https://www.jetbrains.com/help/pycharm/
