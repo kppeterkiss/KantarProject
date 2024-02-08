@@ -18,11 +18,12 @@ figure_dir = "./figures/"
 
 test = True
 local_test_no_db = False
-local_test_no_auth=True
+local_test_no_auth=False
 
 # %%
 read_able_columns = pd.read_excel(data_dir + 'Explicacion_VariablesV3.xlsx', engine='openpyxl')
-data_dir = './test_data/'
+
+#data_dir = './test_data/'
 # %%
 
 # %%
@@ -323,13 +324,21 @@ def get_years_already_loaded(engine):
         lst = df['years'].values.tolist()
     return lst
 
+def get_db_table(tn , engine):
+    df = None
+    if table_exists(engine,tn):
+        df = pd.read_sql_table(year_table_name, engine)
+    return df
+def write_table(tn,df,engine):
+    df.to_sql(tn, engine, if_exists='replace', method='multi', index=False)
+
 def add_years(lst, engine):
     df = pd.DataFrame({'years':lst})
     df.to_sql(year_table_name, engine, if_exists='replace', method='multi', index=False)
 
-def to_table(name, df, engine, mode='append'):
+def append_to_table(name, df, engine, mode='append'):
     from sqlalchemy import create_engine
-    df.to_sql(name, engine, if_exists=mode, method='multi', index=False)
+    df.to_sql(name, engine, if_exists='append', method='multi', index=False)
 
 
 # %%
@@ -340,7 +349,7 @@ def separate_and_save(df, dfs, engine):
         data = df[attributes]
         if name == 'purchases':
             if not local_test_no_db:
-                to_table(name, data, engine)
+                append_to_table(name, data, engine)
             del df
             # data = get_oultiers(data)
         else:
@@ -359,7 +368,6 @@ def separate_and_save(df, dfs, engine):
 # %%
 import fnmatch
 
-dfs = {name: [] for name in tables.keys()}
 nrows = None
 if test:
     nrows = 10
@@ -385,6 +393,7 @@ for f in os.listdir(data_dir):
             print(f"Bad filename {f}: ´{e}")
 
 
+dfs = {name: [] for name in tables.keys()}
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
@@ -408,13 +417,26 @@ if __name__ == '__main__':
             for name, l in dfs.items():
                 if name == 'purchases':
                     continue
-                data = pd.concat(l, ignore_index=True).drop_duplicates()
-                if not local_test_no_db:
-                    to_table(name, data, engine, "append")
+                dfs[name] = [pd.concat(l, ignore_index=True).drop_duplicates()]
+                #if not local_test_no_db:
+                #    write_table(name, data, engine)
 
             years_already_loaded.append(year)
         except Exception as e:
             print(f"Load failed {year}: ´{e}")
+    for name, l in dfs.items():
+        if name == 'purchases':
+            continue
+        data_in_db= get_db_table(name,engine)
+        data = None
+        if l:
+            if isinstance(data_in_db,pd.DataFrame):
+                l.insert(0, data_in_db)
+                data = pd.concat( l, ignore_index=True).drop_duplicates()
+            else:
+                data = l[0]
+        if not local_test_no_db and isinstance(data,pd.DataFrame)  :
+            write_table(name, data, engine)
     add_years(years_already_loaded,engine)
 
 
