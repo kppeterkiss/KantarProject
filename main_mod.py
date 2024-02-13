@@ -162,7 +162,7 @@ def fix_enc(source_df_test, bad_enc=False):
     orig_names = source_df_test.columns.to_list()
     re_encoded_names = [s.encode(input_enc) for s in orig_names]
     if bad_enc:
-        print(orig_names)
+        #print(orig_names)
         re_encoded_names = orig_names
         # re_encoded_names = [codecs.decode(w.encode(input_enc), "utf-8") for w in orig_names]
         for k, v in replace_chars.items():
@@ -208,7 +208,7 @@ def fix_enc(source_df_test, bad_enc=False):
             #print('Trying transformation: ', elem)
             if bad_enc:
                 try:
-                    print("String  ", col, ' t: ', source_df_test[col].dtype)
+                    #print("String  ", col, ' t: ', source_df_test[col].dtype)
                     source_df_test[col] = source_df_test[col].str.encode(input_enc)
                     source_df_test[col] = source_df_test[col].str.decode('utf-8')
                     for k, v in replace_chars.items():
@@ -216,7 +216,7 @@ def fix_enc(source_df_test, bad_enc=False):
                 except Exception as e:
                     print(f"Exception at processing column {col} as a String, declared as {type_dict_new[col]}", e, k)
                     traceback.print_exc()
-       #print(" Converting ", col, ' -> ', type_dict_new[col])
+        #print(" Converting ", col, ' -> ', type_dict_new[col])
         if type_dict_new[col] == 'float64':
 
             #print('Example element:', elem, type(elem))
@@ -228,6 +228,51 @@ def fix_enc(source_df_test, bad_enc=False):
 
     return source_df_test
 
+def load_only_purchase_per_year(year,engine):
+    def process_and_upload(source_df_test, engine):
+
+        source_df_test = fix_enc(source_df_test, bad_enc)
+
+        # transform
+        # if nrows:
+        #    print(source_df_test.iloc[0][['idCompra','Promo_Envase','Promo_Folleto','Promo_TPR']])
+
+        source_df_test['Promo_Envase'] = source_df_test['Promo_Envase'].map({'No': False, 'Si': True})
+        source_df_test['Promo_Folleto'] = source_df_test['Promo_Folleto'].map({'No': False, 'Si': True})
+        source_df_test['Promo_TPR'] = source_df_test['Promo_TPR'].map({'No': False, 'Si': True})
+
+        source_df_test['promo'] = np.where(
+            source_df_test['Promo_Folleto'] | source_df_test['Promo_Envase'] | source_df_test['Promo_TPR'], True, False)
+        append_to_table('purchases', source_df_test, engine)
+
+    p1=purchase_attributes
+    p1.remove("promo")
+    chunksize = 10000
+    i=1
+    if year < 2018:
+        bad_enc = True
+        input_fn = f'{year} data.csv'
+        delimiter = ","
+        for chunk in pd.read_csv(data_dir + input_fn,
+                                     encoding=input_enc,
+                                     delimiter=delimiter,  # decimal=decimal,
+                                     on_bad_lines='skip', nrows=nrows, parse_dates=['FechaCesta'], usecols=p1, chunksize=chunksize):
+            print(f"Loading chunk {i} ...")
+            process_and_upload(chunk, engine)
+            print(f"Loading chunk {i} DONE")
+            i+=1
+    else:
+        bad_enc = False
+        input_fn = f'Datos_{year}.csv'
+        delimiter = ";"
+        for chunk in pd.read_csv(data_dir + input_fn,
+                                     encoding=input_enc,
+                                     delimiter=delimiter,
+                                     on_bad_lines='skip', nrows=nrows, parse_dates=['FechaCesta'], usecols=p1, chunksize=chunksize):
+            print(f"Loading chunk {i} ...")
+            process_and_upload(chunk, engine)
+            print(f"Loading chunk {i} DONE")
+            i += 1
 
 def load_and_preprocess_data(year, nrows=None):
     # load data
@@ -305,7 +350,7 @@ def get_connection():
     if not database_exists(connect_string):
         create_database(connect_string)
 
-    engine = create_engine(connect_string, connect_args={'client_encoding': CHARSET})
+    engine = create_engine(connect_string, connect_args={'client_encoding': CHARSET}, pool_pre_ping=True)
 
 
     return engine
@@ -330,7 +375,10 @@ def get_db_table(tn , engine):
         df = pd.read_sql_table(year_table_name, engine)
     return df
 def write_table(tn,df,engine):
+    print(f"Uploading (WRITE or REPLACE) data to table {name} ...")
     df.to_sql(tn, engine, if_exists='replace', method='multi', index=False)
+    print(f"Uploading (WRITE or REPLACE) data to table {name} is DONE")
+
 
 def add_years(lst, engine):
     df = pd.DataFrame({'years':lst})
@@ -338,7 +386,9 @@ def add_years(lst, engine):
 
 def append_to_table(name, df, engine, mode='append'):
     from sqlalchemy import create_engine
+    print(f"Uploading (APPEND) data to table {name}")
     df.to_sql(name, engine, if_exists='append', method='multi', index=False)
+    print(f"Uploading (APPEND) data to table {name} is DONE")
 
 
 # %%
@@ -370,7 +420,7 @@ import fnmatch
 
 nrows = None
 if test:
-    nrows = 10
+    nrows = 1000
 
 # first separate and save
 years = []
@@ -395,6 +445,9 @@ for f in os.listdir(data_dir):
 
 dfs = {name: [] for name in tables.keys()}
 
+years_to_retry=[2014,2018,2019,2020,2021,2022]
+retry_purchases=True
+
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
 
@@ -403,41 +456,54 @@ if __name__ == '__main__':
     else:
         engine = get_connection()
     years_already_loaded = get_years_already_loaded(engine)
-
-    for year in years:
-        try:
-            if year in years_already_loaded:
-                print(f'Data for {year} already in db.')
-                continue
-            print(f'Loading data for {year} to db..')
-            df = load_and_preprocess_data(year, nrows)
-            # df=get_oultiers(df)
-            dfs = separate_and_save(df, dfs, engine)
-
-            for name, l in dfs.items():
-                if name == 'purchases':
+    if retry_purchases:
+        for year in years_to_retry:
+            try:
+                load_only_purchase_per_year(year,engine)
+                years_already_loaded.append(year)
+            except Exception as e:
+                print(f"Load failed {year}: ´{e}")
+        add_years(years_already_loaded,engine)
+        print("loading purchases DONE")
+    else:
+        for year in years:
+            try:
+                if year in years_already_loaded:
+                    print(f'Data for {year} already in db.')
                     continue
-                dfs[name] = [pd.concat(l, ignore_index=True).drop_duplicates()]
-                #if not local_test_no_db:
-                #    write_table(name, data, engine)
+                print(f'Loading data for {year} to db..')
+                df = load_and_preprocess_data(year, nrows)
+                # df=get_oultiers(df)
+                dfs = separate_and_save(df, dfs, engine)
 
-            years_already_loaded.append(year)
-        except Exception as e:
-            print(f"Load failed {year}: ´{e}")
-    for name, l in dfs.items():
-        if name == 'purchases':
-            continue
-        data_in_db= get_db_table(name,engine)
-        data = None
-        if l:
-            if isinstance(data_in_db,pd.DataFrame):
-                l.insert(0, data_in_db)
-                data = pd.concat( l, ignore_index=True).drop_duplicates()
-            else:
-                data = l[0]
-        if not local_test_no_db and isinstance(data,pd.DataFrame)  :
-            write_table(name, data, engine)
-    add_years(years_already_loaded,engine)
+                for name, l in dfs.items():
+                    if name == 'purchases':
+                        continue
+                    print(f"Concatanating {name} from {year}...")
+                    dfs[name] = [pd.concat(l, ignore_index=True).drop_duplicates()]
+                    print(f"Concatanating {name} from {year} is DONE")
+
+                    #if not local_test_no_db:
+                    #    write_table(name, data, engine)
+                print(f'Processing data for {year} is DONE')
+                years_already_loaded.append(year)
+            except Exception as e:
+                print(f"Load failed {year}: ´{e}")
+        for name, l in dfs.items():
+            if name == 'purchases':
+                continue
+            data_in_db= get_db_table(name,engine)
+            data = None
+            if l:
+                if isinstance(data_in_db,pd.DataFrame):
+                    l.insert(0, data_in_db)
+                    data = pd.concat( l, ignore_index=True).drop_duplicates()
+                else:
+                    data = l[0]
+            if not local_test_no_db and isinstance(data,pd.DataFrame)  :
+                write_table(name, data, engine)
+        add_years(years_already_loaded,engine)
+        print('Finished loading')
 
 
 
