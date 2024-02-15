@@ -246,7 +246,8 @@ def load_only_purchase_per_year(year,engine):
         append_to_table('purchases', source_df_test, engine)
 
     p1=purchase_attributes
-    p1.remove("promo")
+    if "promo" in p1:
+        p1.remove("promo")
     chunksize = 10000
     i=1
     if year < 2018:
@@ -445,7 +446,7 @@ for f in os.listdir(data_dir):
 
 dfs = {name: [] for name in tables.keys()}
 
-years_to_retry=[2014,2018,2019,2020,2021,2022]
+years_to_retry=[2018,2019,2020,2021,2022]
 retry_purchases=True
 
 # Press the green button in the gutter to run the script.
