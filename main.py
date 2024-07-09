@@ -83,6 +83,7 @@ for cn in product_attributes:
 
 # %%
 def general_model(df):
+    print(df)
     if df.shape[0] > 30:
         # for throwing out outliers iteratively if we like, to have a better regression
         cleaning_rounds = 1
