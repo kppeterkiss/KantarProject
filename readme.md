@@ -8,7 +8,8 @@ Add input files to ```./FullKantarData/```
 
 run ```./analysis/simple.ipynb``` for outlier detection, and data separation.
 
-
+## example output:
+![outlier](./analysis/figures/example_od_output.png)
 
 # Kanatar database infrastructure 
 
