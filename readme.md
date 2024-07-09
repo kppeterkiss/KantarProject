@@ -2,6 +2,8 @@
 Create python env:
 ```conda env create  --file=environments.yml```
 
+create ```./analysis/figures``` and ```./analysis/results``` directories if needed
+
 Add input files to ```./FullKantarData/``` 
 
 run ```./analysis/simple.ipynb``` for outlier detection, and data separation.
