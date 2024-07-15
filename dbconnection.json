@@ -1,7 +1,7 @@
 {
-  "DB_HOST":"localhost",
+  "DB_HOST":"db",
   "DB_PORT":5432,
   "DATABASE":"Kantar",
   "DB_USER":"postgres",
-  "DB_PASS":"Creda2023"
-  }
+  "DB_PASS":"postgres"
+}
