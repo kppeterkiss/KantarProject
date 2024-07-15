@@ -1,12 +1,12 @@
 # outlier detection in data + relational scheme creation in ```.dta``` files:
-Create python env:
-```conda env create  --file=environments.yml```
+- Create python env:
+```conda env create  --file environments.yml```
 
-create ```./analysis/figures``` and ```./analysis/results``` directories if needed
+- create ```./analysis/figures``` and ```./analysis/results``` directories if needed
 
-Add input files to ```./FullKantarData/``` 
+- Add input files to ```./FullKantarData/``` 
 
-run ```./analysis/simple.ipynb``` for outlier detection, and data separation.
+- run ```./analysis/simple.ipynb``` for outlier detection, and data separation in the generated ```kantar_data_env2``` conda environment.
 
 ## example output:
 ![outlier](./analysis/figures/example_od_output.png)
