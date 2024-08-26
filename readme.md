@@ -15,6 +15,10 @@
 
 Setting up database infrastructure:
 
+- clone this repo
+- load csv files into KantarData folder
+
+
 ```docker compose up```
 
 
